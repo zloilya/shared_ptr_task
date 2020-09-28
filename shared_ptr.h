@@ -47,8 +47,7 @@ struct cb_ptr final : control_block {
     D deleter;
 
     explicit cb_ptr(U* ptr, D deleter = std::default_delete<U>())
-            : ptr(ptr)
-            , deleter(std::move(deleter))
+            : ptr(ptr) , deleter(std::move(deleter))
     {}
 
     void delete_object() override {
@@ -69,7 +68,7 @@ struct cb_obj final : control_block {
         return reinterpret_cast<U *>(&data);
     }
 
-    void delete_object() {
+    void delete_object() override {
         reinterpret_cast<U &>(data).~U();
     }
 };
@@ -163,7 +162,7 @@ public:
         return expired() ? shared_ptr<T>() : shared_ptr<T>(*this);
     }
 
-    bool expired() const noexcept {
+    [[nodiscard]] bool expired() const noexcept {
         return cb == nullptr || cb->use_count() == 0;
     }
 
@@ -208,7 +207,7 @@ public:
     template<typename U>
     shared_ptr(U* new_ptr) {
         try {
-            cb  = new cb_ptr<U>(new_ptr, std::default_delete<U>());
+            cb  = new cb_ptr<U>(new_ptr);
             ptr = new_ptr;
             cb->add_ref();
         } catch (...) {
@@ -300,7 +299,7 @@ public:
     }
 
     void reset() noexcept {
-        if(cb != nullptr) {
+        if (cb != nullptr) {
             cb->release_ref();
         }
         shared_ptr().swap(*this);
@@ -308,14 +307,14 @@ public:
 
     template<class U>
     void reset(U *_ptr) {
-        if(cb != nullptr)
+        if (cb != nullptr)
             cb->release_ref();
         shared_ptr(_ptr).swap(*this);
     }
 
     template<class U, class D>
     void reset(U *_ptr, D _d) {
-        if(cb != nullptr)
+        if (cb != nullptr)
             cb->release_ref();
         shared_ptr(_ptr, _d).swap(*this);
     }
@@ -356,7 +355,7 @@ public:
         if (cb != nullptr && cb->use_count() != 0) {
             cb->release_ref();
         }
-        if(cb != nullptr && cb->use_weak() == 0) {
+        if (cb != nullptr && cb->use_weak() == 0) {
             delete cb;
         }
     }
