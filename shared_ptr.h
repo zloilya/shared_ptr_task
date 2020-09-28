@@ -12,7 +12,7 @@ private:
     template<typename Y>
     friend struct shared_ptr;
 
-    control_block *cb;
+    control_block *cb{};
     T* ptr;
 
 public:
@@ -20,25 +20,29 @@ public:
     // нулевой shared_pointer :: ptr == nullptr
 
     // пустой и нулевой объект
-    shared_ptr()
+    constexpr shared_ptr() noexcept
             : cb(nullptr), ptr(nullptr) {}
 
     // тоже пустой нулевой
-    shared_ptr(std::nullptr_t)
+    constexpr shared_ptr(std::nullptr_t) noexcept
             : shared_ptr() {}
 
-    template<typename D>
-    shared_ptr(std::nullptr_t, D)
-            : shared_ptr() {}
+    template<typename U>
+    explicit shared_ptr(U* ptr)
+    : shared_ptr(ptr, std::default_delete<U>()){}
 
-    template<typename U, typename D = std::default_delete<U>>
-    explicit shared_ptr(U* new_ptr, D deleter = std::default_delete<U>()) try
+    template<typename U, typename D>
+    shared_ptr(U* new_ptr, D deleter) try
             : cb(new control_block_ptr<U, D>(new_ptr, std::move(deleter))), ptr(new_ptr) {
         cb->add_ref();
     } catch (...) {
         deleter(new_ptr);
         throw ;
     }
+
+    template<typename D>
+    shared_ptr(std::nullptr_t, D)
+            : shared_ptr() {}
 
     // aliasing constructor
     template<typename U>
