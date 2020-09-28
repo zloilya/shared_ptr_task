@@ -27,9 +27,9 @@ public:
     shared_ptr(std::nullptr_t)
             : shared_ptr() {}
 
-
-    // Base, Derived : Base.
-    // shared_ptr<Base>(new Derived()) -> Y = Derived
+    template<typename D>
+    shared_ptr(std::nullptr_t, D)
+            : shared_ptr() {}
 
     template<typename U, typename D = std::default_delete<U>>
     shared_ptr(U* new_ptr, D deleter = std::default_delete<U>()) try
