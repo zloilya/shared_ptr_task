@@ -32,7 +32,7 @@ public:
             : shared_ptr() {}
 
     template<typename U, typename D = std::default_delete<U>>
-    shared_ptr(U* new_ptr, D deleter = std::default_delete<U>()) try
+    explicit shared_ptr(U* new_ptr, D deleter = std::default_delete<U>()) try
             : cb(new control_block_ptr<U, D>(new_ptr, std::move(deleter))), ptr(new_ptr) {
         cb->add_ref();
     } catch (...) {
