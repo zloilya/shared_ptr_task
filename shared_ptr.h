@@ -57,7 +57,7 @@ struct cb_ptr final : control_block {
 };
 
 template <typename U>
-struct cb_obj : control_block {
+struct cb_obj final : control_block {
     std::aligned_storage_t<sizeof(U), alignof(U)> data;
 
     template <typename... Args>
@@ -213,6 +213,7 @@ public:
             cb->add_ref();
         } catch (...) {
             delete new_ptr;
+            throw ;
         }
     }
 
@@ -227,6 +228,7 @@ public:
             cb->add_ref();
         } catch (...) {
             deleter(new_ptr);
+            throw ;
         }
     }
 
@@ -353,6 +355,9 @@ public:
     ~shared_ptr() {
         if (cb != nullptr && cb->use_count() != 0) {
             cb->release_ref();
+        }
+        if(cb != nullptr && cb->use_weak() == 0) {
+            delete cb;
         }
     }
 };
