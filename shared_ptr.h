@@ -32,15 +32,12 @@ public:
     // shared_ptr<Base>(new Derived()) -> Y = Derived
 
     template<typename U, typename D = std::default_delete<U>>
-    shared_ptr(U* new_ptr, D deleter = std::default_delete<U>()) {
-        try {
-            cb  = new control_block_ptr<U, D>(new_ptr, std::move(deleter));
-            ptr = new_ptr;
-            cb->add_ref();
-        } catch (...) {
-            deleter(new_ptr);
-            throw ;
-        }
+    shared_ptr(U* new_ptr, D deleter = std::default_delete<U>()) try
+            : cb(new control_block_ptr<U, D>(new_ptr, std::move(deleter))), ptr(new_ptr) {
+        cb->add_ref();
+    } catch (...) {
+        deleter(new_ptr);
+        throw ;
     }
 
     // aliasing constructor
@@ -114,13 +111,13 @@ public:
     }
 
     template<class U>
-    void reset(U *_ptr) {
-        shared_ptr(_ptr).swap(*this);
+    void reset(U* pU) {
+        shared_ptr(pU).swap(*this);
     }
 
     template<class U, class D>
-    void reset(U *_ptr, D _d) {
-        shared_ptr(_ptr, _d).swap(*this);
+    void reset(U* pU, D d) {
+        shared_ptr(pU, std::move(d)).swap(*this);
     }
 
     shared_ptr &operator=(const shared_ptr &sp) noexcept {
