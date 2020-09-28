@@ -1,8 +1,11 @@
 #pragma once
 
 struct control_block {
+
+private:
     size_t ref_cnt  = 0;
     size_t weak_cnt = 0;
+public:
 
     void release_ref() {
         --ref_cnt;
@@ -42,25 +45,24 @@ struct control_block {
 // -> empty base optimization
 
 template <typename U, typename D = std::default_delete<U>>
-struct cb_ptr final : control_block {
+struct control_block_ptr final : control_block, D {
     U* ptr;
-    D deleter;
 
-    explicit cb_ptr(U* ptr, D deleter = std::default_delete<U>())
-            : ptr(ptr) , deleter(std::move(deleter))
+    explicit control_block_ptr(U* ptr, D deleter = std::default_delete<U>())
+            : ptr(ptr), D(std::move(deleter))
     {}
 
     void delete_object() override {
-        deleter(ptr);
+        static_cast<D &>(*this)(ptr);
     }
 };
 
 template <typename U>
-struct cb_obj final : control_block {
+struct control_block_object final : control_block {
     std::aligned_storage_t<sizeof(U), alignof(U)> data;
 
     template <typename... Args>
-    explicit cb_obj(Args&& ...args) {
+    explicit control_block_object(Args&& ...args) {
         new (&data) U(std::forward<Args>(args)...);
     }
 
@@ -109,14 +111,14 @@ public:
             : cb(add_weak(r.cb)), ptr(r.ptr) {}
 
     weak_ptr(weak_ptr &&r) noexcept
-            : cb(add_weak(r.cb)), ptr(r.ptr) {
+            : cb(r.cb), ptr(r.ptr) {
         r.cb  = nullptr;
         r.ptr = nullptr;
     }
 
     template<class Y>
     weak_ptr(weak_ptr<Y> &&r) noexcept
-            : cb(add_weak(r.cb)), ptr(r.ptr) {
+            : cb(r.cb), ptr(r.ptr) {
         r.cb  = nullptr;
         r.ptr = nullptr;
     }
@@ -199,30 +201,16 @@ public:
 
     // тоже пустой нулевой
     shared_ptr(std::nullptr_t)
-            : cb(nullptr), ptr(nullptr) {}
+            : shared_ptr() {}
 
-
-    // shared_ptr(T*); -> T = Base => ~Base()
-    // непустой объект
-    template<typename U>
-    shared_ptr(U* new_ptr) {
-        try {
-            cb  = new cb_ptr<U>(new_ptr);
-            ptr = new_ptr;
-            cb->add_ref();
-        } catch (...) {
-            delete new_ptr;
-            throw ;
-        }
-    }
 
     // Base, Derived : Base.
     // shared_ptr<Base>(new Derived()) -> Y = Derived
 
-    template<typename U, typename D>
-    shared_ptr(U* new_ptr, D deleter) {
+    template<typename U, typename D = std::default_delete<U>>
+    shared_ptr(U* new_ptr, D deleter = std::default_delete<U>()) {
         try {
-            cb  = new cb_ptr<U, D>(new_ptr, deleter);
+            cb  = new control_block_ptr<U, D>(new_ptr, std::move(deleter));
             ptr = new_ptr;
             cb->add_ref();
         } catch (...) {
@@ -273,7 +261,7 @@ public:
             cb->add_ref();
     }
 
-    T* get() noexcept {
+    T* get() const noexcept {
         return ptr;
     }
 
@@ -294,28 +282,20 @@ public:
     }
 
     [[nodiscard]] size_t use_count() const noexcept {
-        if (cb == nullptr) return 0;
-        return cb->use_count();
+        return cb == nullptr ? 0 : cb->use_count();
     }
 
     void reset() noexcept {
-        if (cb != nullptr) {
-            cb->release_ref();
-        }
         shared_ptr().swap(*this);
     }
 
     template<class U>
     void reset(U *_ptr) {
-        if (cb != nullptr)
-            cb->release_ref();
         shared_ptr(_ptr).swap(*this);
     }
 
     template<class U, class D>
     void reset(U *_ptr, D _d) {
-        if (cb != nullptr)
-            cb->release_ref();
         shared_ptr(_ptr, _d).swap(*this);
     }
 
@@ -340,12 +320,22 @@ public:
         std::swap(cb , sp.cb );
     }
 
-    friend bool operator==(const shared_ptr &lhs, const shared_ptr &rhs) {
-        return  lhs.ptr == rhs.ptr;
+    template<typename V>
+    bool operator==(shared_ptr<V> const& lhs) {
+        return ptr == lhs.get();
     }
 
-    friend bool operator!=(const shared_ptr &lhs, const shared_ptr &rhs) {
-        return  lhs.ptr != rhs.ptr;
+    template<typename V>
+    bool operator!=(shared_ptr<V> const& lhs) {
+        return ptr != lhs.get();
+    }
+
+    bool operator==(std::nullptr_t) {
+        return ptr == nullptr;
+    }
+
+    bool operator!=(std::nullptr_t) {
+        return ptr != nullptr;
     }
 
     template<typename U, typename... Args>
@@ -361,9 +351,19 @@ public:
     }
 };
 
+template<typename V>
+bool operator==(std::nullptr_t, shared_ptr<V> const& lhs) {
+    return lhs.get() == nullptr;
+}
+
+template<typename V>
+bool operator!=(std::nullptr_t, shared_ptr<V> const& lhs) {
+    return lhs.get() != nullptr;
+}
+
 template<typename Y, typename... Args>
 shared_ptr<Y> make_shared(Args &&... args) {
-    auto* b = new cb_obj<Y>(std::forward<Args>(args)...);
+    auto* b = new control_block_object<Y>(std::forward<Args>(args)...);
     b->add_ref();
     shared_ptr<Y> ans;
     ans.cb  = b;
